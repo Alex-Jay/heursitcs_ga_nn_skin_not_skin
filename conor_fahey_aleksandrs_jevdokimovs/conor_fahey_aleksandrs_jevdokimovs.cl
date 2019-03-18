@@ -12,7 +12,7 @@
 (defvar *defaultGenerations* 10)
 (defvar *populationSize* 5)
 (defvar *fittestForReproductionAmount* 4)
-(defvar *eliteMembersAmount* 2)
+(defvar *eliteMemSize* 2)
 
 (defvar *mutationChance* 15)
 (defvar *mutationRate* 0.2)
@@ -210,9 +210,7 @@
 
 
 (defun test-set ()
-    "After the training is finished, due to number of generations reached or error at reasonable value,
-	the best chromosome (highest fitness) is selected & converted to weights. It is then used in our fitness function,
-	to see how much errors and success we get from the training dataset. Results are printed at the end."
+    "Chromosomes are trained and we get their total error and fitness"
 	(setf *totalCorrect* 0)
 	(NN-read-test-file)
 	
@@ -243,12 +241,6 @@
 	)
 )
 
-(defun prepare-test ()
-	(NN-read-test-file)
-	(NN-def-Weights)
-	(GA-init-population)
-)
-
 (defun NN-start-training (generations)
 	"Main function that is called to start training off. From here Neural Network, initial population &
 	fitness values are defined. After initial population is trained, the Genetic Algorithm is performed to
@@ -269,19 +261,19 @@
 	;chance of Mutation (multiple times if the hidden nodes is high). This is done for no. generations defined
 	(let*
 		(
-			(eliteMembers (make-list *eliteMembersAmount*))
+			(eliteMembers (make-list *eliteMemSize*))
 		)
 		
 		(dotimes (i generations)
 			
 			(sort *population* #'> :key #'cdr) ; Sort population by key (fitness) i.e. highest is first
 
-			(dotimes (j *eliteMembersAmount*) ; create a list for the specified elite member amount
+			(dotimes (j *eliteMemSize*) ; create a list for the specified elite member amount
 				(setf (nth j eliteMembers) (nth j *population*))
 			)
 			
 			(print-new-line)
-			(format t "~%Generation # ~4d" (+ i 1))
+			(format t "~%Gen: # ~4d" (+ i 1))
 			(print-new-line)
 			
 			(let* 
@@ -292,17 +284,14 @@
 					(parentOne '()) ; chromosome
 					(randomNumberTwo 0)
 					(parentTwo '())
-					
-					(inputToHiddenCrossover '())
-					(hiddenToOutputCrossover'())
-					
+					(weightBCrossover '())
+					(weightACrossover'())
 					(offspring '())
 					(currentOffspring '())
 					(currentOffspringError 0)
 					(fittestForReproduction (make-list *fittestForReproductionAmount* :initial-element 1))
 					(cumulative (make-list *fittestForReproductionAmount* :initial-element 1))
 					(normalized (make-list *fittestForReproductionAmount* :initial-element 1))
-					
 					(newPopulationFitnesses '())
 				)
 				
@@ -323,7 +312,7 @@
 				)
 				
 				;Find how many offspring needed, minus elite members
-				(setf requiredOffspring (- *populationSize* *eliteMembersAmount*))
+				(setf requiredOffspring (- *populationSize* *eliteMemSize*))
 				(setf offspring (make-list requiredOffspring))
 				
 			    ;Create the offspring, starting with Selection (Roulette Wheel), Crossover (Single Point) & Mutation
@@ -358,11 +347,11 @@
 					(setf parentOneWeightPair (split-chromosome parentOne (* *inputWithDummyLength* *hlNeruons*)))
 					(setf parentTwoWeightPair (split-chromosome parentTwo (* *inputWithDummyLength* *hlNeruons*)))
 					
-					(setf inputToHiddenCrossover (crossover (car parentOneWeightPair) (car parentTwoWeightPair)))
-					(setf hiddenToOutputCrossover (crossover (cdr parentOneWeightPair) (cdr parentTwoWeightPair)))
+					(setf weightBCrossover (crossover (car parentOneWeightPair) (car parentTwoWeightPair)))
+					(setf weightACrossover (crossover (cdr parentOneWeightPair) (cdr parentTwoWeightPair)))
 	
 					; now to add the two together and mutate to whole chromosome		
-					(setf currentOffspring (mutate (append inputToHiddenCrossover hiddenToOutputCrossover)))
+					(setf currentOffspring (mutate (append weightBCrossover weightACrossover)))
 					
 					;(setf currentOffspring (genetic-algorithm parentOne parentTwo))
 					(NN-convert-chromosome-to-weights currentOffspring) ; convert the new offspring to neural network weights so that we can check its fitness 
@@ -659,7 +648,7 @@
            	;	(setf *tempDataLoad* (cons (cons inputPart outputPart) *tempDataLoad*))
            	; Output => '((INPUTS) . DESIRED_OUTPUT)
            	(setf inputPart (parse-double-list (string (subseq line 0 (- (length line) 1) )))) ; Parse integers 
-           	(setf outputPart (subseq line 0 1))
+           	(setf outputPart (subseq line (- (length line) 1) (length line)))
            	(setf *tempDataLoad* (cons (cons inputPart outputPart) *tempDataLoad*))
            
 						;(setf inputPart (parse-double-list (string (subseq line *outputLength*)))) ;Parse doubles from the line
