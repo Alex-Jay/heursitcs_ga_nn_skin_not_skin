@@ -86,7 +86,6 @@
 	)
 )
 
-
 (defun GA-create-initial-chromosome()
   	"Needed for creating random chromosomes for initial population"
   	; Create a chromosome of size 21
@@ -122,8 +121,6 @@
 	(setf *testData* *tempDataLoad*)
 	(setf *tempDataLoad* '())
 )
-
-
 
 (defun NN-read-training-file ()
 	"1: Load data from file [INPUTS, OUTPUT] | 
@@ -174,7 +171,6 @@
 	)
 )
 
-
 (defun NN-get-fitness-test-set ()
     "Chromosomes are trained and we get their total error and fitness"
 	
@@ -209,7 +205,7 @@
 )
 
 ; ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-; ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+; ///////////////////////////////////////////CORE FUNCTIONALITY//////////////////////////////////////////////////
 ; ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ; Main function
 
@@ -435,8 +431,6 @@
 	)
 )
 
-
-
 ; Source: https://ai.stackexchange.com/questions/3428/mutation-and-crossover-in-a-genetic-algorithm-with-real-numbers
 ; genome1 = { GeneA: 1, GeneB: 2.5, GeneC: 3.4 }
 ; genome2 = { GeneA: 0.4, GeneB: 3.5, GeneC: 3.2 }
@@ -456,7 +450,6 @@
       childChromosome
     )
 )
-
 
 ; Train iterates 200k+ times
 (defun train ()
@@ -587,7 +580,6 @@
 	)
 )
 
-
 ; ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ; /////////////////////////////////////////////HELPER FUNCTIONS//////////////////////////////////////////////////
 ; ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -629,7 +621,6 @@
 	)
 )
 
-
 (defun sigmoid (x)
     "Sigmoid Function ( 1/1+e^-x )"
     (/ 1 (+ 1 (exp (- x))))
@@ -667,7 +658,6 @@
 	)
 )
 
-
 (defun take-line (line)
     "Take a line from the data list and convert to matrix 1*4"
 	
@@ -686,7 +676,6 @@
 		result
 	)
 )
-
 
 (defun parse-desired-outputs (line)
     "Take a line of output and inputs and parse it"
@@ -722,8 +711,6 @@
     "Get random range of integer/float values"
 	(+ min (random max *random-state*))
 )
-
-
 
 ;https://archive.ics.uci.edu/ml/machine-learning-databases/00229/Skin_NonSkin.txt
 ;(load [filepath])
