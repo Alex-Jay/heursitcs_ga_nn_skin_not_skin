@@ -1,9 +1,5 @@
-(load "C:\\Users\\User\\Desktop\\heursitcs_ga_nn_skin_not_skin\\conor_fahey_aleksandrs_jevdokimovs\\conor_fahey_aleksandrs_jevdokimovs.cl")
-(set-training-data-file-path "C:\\Users\\User\\Desktop\\heursitcs_ga_nn_skin_not_skin\\conor_fahey_aleksandrs_jevdokimovs\\Dataset\\Normalized\\training_set_sns_normalized.txt")
-(set-test-data-file-path "C:\\Users\\User\\Desktop\\heursitcs_ga_nn_skin_not_skin\\conor_fahey_aleksandrs_jevdokimovs\\Dataset\\Normalized\\test_set_sns_normalized.txt")
-(NN-read-training-file)
-(print *trainingData*)
-(NN-read-test-file)
-(print *testData*)
-
-5DpLDr
+LOAD: (load [PATH])
+TRAINING_DATA: (set-training-path [PATH])
+TEST_DATA: (set-test-path [PATH])
+START_NN: (NN-start-training [#. of Gens])
+TEST_NN: (NN-get-fitness-test-set)

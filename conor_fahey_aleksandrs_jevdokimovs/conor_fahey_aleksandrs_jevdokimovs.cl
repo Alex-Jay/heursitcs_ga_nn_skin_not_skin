@@ -154,6 +154,7 @@
 			; cdr -> fitness
 			(NN-convert-chromosome-to-weights (car currChromosomePair))
 			(format t "~%Start with chromosome # ~4d" i)
+			(format t "~%Current Chromosome: ~S" (car currChromosomePair))
 			(setf dataSetError (train))
 			
 			; Insert fitness value for the matching chromosome
@@ -498,9 +499,9 @@
 )
 
 (defun determine-fitness (inputs desiredOutput)
-	"Our main fitness function. This performs a feed-forward through the network, calculating the outputs, 
+	"Calculate the outputs, 
 	rounding the outputs (max to 1 and rest to 0), subtract desired from output to get errors, square + add errors to get total error.
-	This is usually run through total dataset (batch calculation), Sum of total errors = Our Fitness value assigned"
+	This is usually run through total dataset (batch calculation), E(total errors) => Fitness value"
 	
     (let* (
 			(xB (NN-matrix-multiplication inputs *weightB*))
@@ -509,7 +510,7 @@
 			(output (make-array (list 1 *outputLength*) :initial-element 1))
 			(errors (make-array (list 1 *outputLength*) :initial-element 1))
 			(totalError 0)
-			(otpt '(1))
+			(tempOutput '(1))
 	      )
 
 			(setf (aref h 0 0) *dummyValue*)
@@ -520,22 +521,31 @@
 			(setf hA (NN-matrix-multiplication h *weightA*))
 			(dotimes (i *outputLength*)
 				(setf (aref output 0 i) (sigmoid(aref hA 0 i)))
-				(setf (nth i otpt) (aref output 0 i)) ; round the values
-			) 
-			; round up the output
-			(setf biggestIdx (position (maximum otpt) otpt)) ;Index of highest 1
+				(setf (nth i tempOutput) (aref output 0 i)) ; Store output in temporary variable
+			)
+			
+			; Round up (OR) down the output
 			(dotimes (i *outputLength*)
-				(if (= i biggestIdx)
+				(if (> (car tempOutput) 0.5)
 					(setf (aref output 0 i) 1)
 					(setf (aref output 0 i) 0)
 				)
 			)
+			
+			; round up the output
+			;(setf biggestIdx (position (maximum tempOutput) tempOutput)) ;Index of highest 1
+			;(dotimes (i *outputLength*)
+		;		(if (= i biggestIdx)
+		;			(setf (aref output 0 i) 1)
+		;			(setf (aref output 0 i) 0)
+		;		)
+		;	)
 		  
 		; Checks if desired & actual outcome is equal
 		(if (equalp output desiredOutput)
 			(setf *totalCorrect* (+ *totalCorrect* 1))
 		)
-		(format t "~& Output: ~D | Desired: ~D | Total Correct: ~D" output desiredOutput *totalCorrect*)
+		;(format t "~& Output: ~D | Desired: ~D | Total Correct: ~D" output desiredOutput *totalCorrect*)
 		;Get errors from each desiredOutput and output
 		(dotimes (i *outputLength*)
 			(setf (aref errors 0 i) (- (aref desiredOutput 0 i) (aref output 0 i)))
@@ -697,12 +707,12 @@
 	(format t "~%")
 )
 
-(defun set-test-data-file-path (filePath)
+(defun set-test-path (filePath)
     "Set test data file path"
 	(setf *testDataFilePath* filePath)
 )
 
-(defun set-training-data-file-path (filePath)
+(defun set-training-path (filePath)
     "Set training data file path"
 	(setf *trainingDataFilePath* filePath)
 )
@@ -733,8 +743,8 @@
 
 ; Extra test commands
 ; 1: (load "C:\\path\\to\\cl")
-; 2: (set-training-data-file-path "C:\\path\\to\\training_data")
-; 3: (set-test-data-file-path "C:\\path\\to\\test_data")
+; 2: (set-training-path "C:\\path\\to\\training_data")
+; 3: (set-test-path "C:\\path\\to\\test_data")
 ; 4i: (NN-read-training-file)
 ; 5i: (print *trainingData*)
 ; 4ii: (NN-read-test-file)
