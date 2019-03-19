@@ -17,7 +17,7 @@
 (defvar *dummyValue* 1)		; Use for padding inputs
 (defvar *totalError* 0)
 (defvar *totalCorrect* 0)
-(defvar *printErrorRate* 7000)	; Print total error rate every 7000 inputs
+(defvar *printErrorRate* 400)	; Print total error rate every 7000 inputs
 (defvar *learningRate* 0.1)
 
 ; Genetic Algorithm variables
@@ -74,6 +74,7 @@
 	; Output 										-> #2A((1) (1) (1) (1) (1))
 	
 	(setf *weightA* (make-array (list *hlNeruonsWithDummyLength* *outputLength*) :initial-element 1)) 
+	;(setf arr1 (make-array (list 1 (nth 0 (array-dimensions (make-array (list 5 1) :initial-element 1)))) :initial-element 1))
 	T
 )
 
@@ -190,7 +191,7 @@
 			(setf dataSetError 
 				(+ 
 					dataSetError 
-					(determine-fitness (take-line currLine) (parse-desired-outputs currLine))
+					(determine-fitness (take-line (car currLine)) (parse-desired-outputs (cdr currLine)))
 				)
 			)
 		)
@@ -467,13 +468,9 @@
 			; currLine -> ['(INPUTS) . DESIRED_OUTCOME]
 			(setf currLine (nth i *trainingData*))
 			(setf dataSetError 
-				(+ 
-					dataSetError 
-					(print "-------->>> INSIDE TRAIN")
-					(print currLine)
-					(determine-fitness (take-line (car currLine)) (parse-desired-outputs (cdr currLine)))
-				)
+				(+ dataSetError (determine-fitness (take-line (car currLine)) (parse-desired-outputs (cdr currLine))))
 			)
+			
 			; Print dataset error every 7,000 inputs
 			(if (zerop (mod i *printErrorRate*))
 				(progn
@@ -483,9 +480,10 @@
 		)
 		
 	; Display final results from the current set of weights
-   	(print "=================== Current Weight Results ===================")
+   	(print "=================== Current Weight Results ===================") 	
 		(format t "~% Total Error [Current Weights]: ~9,6F" dataSetError)
 		(format t "~% Total Fitness: ~9,10F" (/ 1 dataSetError))
+		(format t "~& ---> Total Correct: ~D" *totalCorrect*)
 		(if (= *totalCorrect* 0)
 			(progn
 				(format t "~% Chromosome Accuracy: ~9,10F" 0)
@@ -520,38 +518,36 @@
 			)
 		  
 			(setf hA (NN-matrix-multiplication h *weightA*))
-			(format t "===============>>>> hA: ~S <<<=================" hA)
 			(dotimes (i *outputLength*)
 				(setf (aref output 0 i) (sigmoid(aref hA 0 i)))
 				(setf (nth i otpt) (aref output 0 i)) ; round the values
 			) 
-		  
 			; round up the output
-			;(setf biggestIdx (position (maximum otpt) otpt)) ;Index of highest 1
-			;(dotimes (i *outputLength*)
-			;	(if (= i biggestIdx)
-			;		(setf (aref output 0 i) 1)
-			;		(setf (aref output 0 i) 0)
-			;	)
-			;)
+			(setf biggestIdx (position (maximum otpt) otpt)) ;Index of highest 1
+			(dotimes (i *outputLength*)
+				(if (= i biggestIdx)
+					(setf (aref output 0 i) 1)
+					(setf (aref output 0 i) 0)
+				)
+			)
 		  
 		; Checks if desired & actual outcome is equal
 		(if (equalp output desiredOutput)
 			(setf *totalCorrect* (+ *totalCorrect* 1))
 		)
-		  
+		(format t "~& Output: ~D | Desired: ~D | Total Correct: ~D" output desiredOutput *totalCorrect*)
 		;Get errors from each desiredOutput and output
 		(dotimes (i *outputLength*)
 			(setf (aref errors 0 i) (- (aref desiredOutput 0 i) (aref output 0 i)))
 			(setf totalError (+ (square (aref errors 0 i)) totalError))
 		)
-
 		totalError
 	)
 )
 
 (defun get-weights-from-chromosome (chromosome)
 	"Chromosome transformed back into two sets of weights"
+	
     (let* 
 		(
 			(weightsB (make-array (list *inputWithDummyLength* *hlNeruons*) :initial-element 1))
@@ -588,6 +584,7 @@
     "Take string input and parse double values (return as a list)"
 	; Example: (with-input-from-string (in "3.14 5.646 4 9.6")
 	; nil nil: 2 tab spaces
+	
     (with-input-from-string (in lineStr)
         (loop for x = (read in nil nil) while x collect x)
 	)
@@ -596,6 +593,7 @@
 (defun NN-read-file (path)
     "Read outputs and inputs and store them in a list of lists called *trainingData*
 	In train function these are later separated line by line into output matrix and input matrix"
+	
 	(let ((stream (open path :if-does-not-exist nil)))
 		(when stream
 			(loop for line = (read-line stream nil)
@@ -624,16 +622,20 @@
 
 (defun sigmoid (x)
     "Sigmoid Function ( 1/1+e^-x )"
+	
     (/ 1 (+ 1 (exp (- x))))
 )
 
 (defun square (x)
     "Square a number"
+	
     (* x x)
 )
 
 (defun maximum (list)
     "Get max value from a list"
+	
+	; reduce -> function, list
     (reduce #'max list)
 )
 
@@ -666,21 +668,9 @@
 			(result (make-array (list 1 *inputWithDummyLength*) :initial-element 1))
 	      )
 			(setf (aref result 0 0) *dummyValue*) ;Set dummy value 1
-			
-			(print "-------->>> INSIDE TAKE-LINE: Dummy value set")
-			
-			(format t "-------->>> line: ~S" line)
-			(format t "-------->>> line Length: ~D" (length line))
           
-			(dotimes (i (- (length line) 1))
-        (print-Nl)
-        (format t "~%Index: [~D]~%" i)
-        (print line)
-        (print-Nl)
-        ;
-        ;	HEY! There is a bug here. On index 3, trying to access outside of 
-        ;
-				(setf (aref result 0 (+ i 1)) (nth i line))
+			(dotimes (i (length line))
+				(setf (aref result 0 (+ i 1)) (get-nth-of-list i line))
 			)
 		result
 	)
@@ -691,12 +681,13 @@
 	
     (let* (
 			(result (make-array (list 1 *outputLength*) :initial-element 1))
-			(outputStr (nth 0 line))
+			(outputStr line)
 		  )
 		  
-		(dotimes (i (length outputStr))
-			(setf (aref result 0 i) (parse-integer (subseq outputStr i (+ i 1))))
-		)
+		;(dotimes (i (length outputStr))
+		;	(setf (aref result 0 i) (parse-integer (subseq outputStr i (+ i 1))))
+		;)
+		(setf (aref result 0 0) (parse-integer line))
 		result
 	)
 )
@@ -717,8 +708,18 @@
 )
 
 (defun get-random-range(min max)
-    "Get random range of integer/float values"
+    "Get random range of integer/float values /w random seed"
+	
 	(+ min (random max *random-state*))
+)
+
+; Code written by Shane Dowdall in lecture
+(defun get-nth-of-list (n list)
+	"Get nth element of a list recursively"
+	(cond	((= n 0) 						(car list)	 )
+			((null list) 					nil			 )
+			(t (get-nth-of-list (- n 1) 	(cdr list))	 )
+	)
 )
 
 ;https://archive.ics.uci.edu/ml/machine-learning-databases/00229/Skin_NonSkin.txt
