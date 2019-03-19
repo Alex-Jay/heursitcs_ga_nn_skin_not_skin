@@ -4,7 +4,7 @@
 (defparameter *testData* '())
 (defparameter *tempDataLoad* '())
 
-(defvar *outputLength* 1)
+(defvar *outputLength* 1) ;either skin or not skin
 (defvar *inputLength* 3) ; R - G - B
 (defvar *hlNeruons* 4)
 (defvar *dummyValue* 1)
@@ -15,10 +15,13 @@
 (defvar *eliteMemSize* 2)
 
 (defvar *mutationChance* 15)
-(defvar *mutationRate* 0.2)
+(defvar *mutationRateHigh* 0.2)
+(defvar *mutationRateLow* 0.05)
+(defvar *amountOfWeightsMutatedPerChromosome* 7)
 (defvar *learningRate* 0.1)
 (defvar *totalCorrect* 0)
 (defvar *totalError* 0)
+(defvar *printErrorRate* 7000)
 
 (defparameter *randomHigh* 1.0)
 (defparameter *randomLow* -1.0)
@@ -26,7 +29,7 @@
 (setf *random-state* (make-random-state t))
 
 (defun reset-all-data ()
-    "Reset the variable"
+    "Reset the variables"
 	(setf *trainingData* '())
 	(setf *tempDataLoad* '())
 	(setf *testData* '())
@@ -209,7 +212,7 @@
 )
 
 
-(defun test-set ()
+(defun NN-get-fitness-test-set ()
     "Chromosomes are trained and we get their total error and fitness"
 	(setf *totalCorrect* 0)
 	(NN-read-test-file)
@@ -223,11 +226,11 @@
 		)
 		
 		(dotimes (i (length *testData*))
-			(setf currentLine (nth i *testData*))
+			(setf currLine (nth i *testData*))
 			(setf dataSetError 
 				(+ 
 					dataSetError 
-					(determine-fitness (take-line currentLine) (parse-desired-outputs currentLine))
+					(determine-fitness (take-line currLine) (parse-desired-outputs currLine))
 				)
 			)
 		)
@@ -269,7 +272,7 @@
 			(sort *population* #'> :key #'cdr) ; Sort population by key (fitness) i.e. highest is first
 
 			(dotimes (j *eliteMemSize*) ; create a list for the specified elite member amount
-				(setf (nth j eliteMembers) (nth j *population*))
+				(setf (nth j eliteMembers) (nth j *population*))	; Iterate from fittest and note elite members
 			)
 			
 			(print-new-line)
@@ -284,8 +287,7 @@
 					(parentOne '()) ; chromosome
 					(randomNumberTwo 0)
 					(parentTwo '())
-					(weightBCrossover '())
-					(weightACrossover'())
+					(childAverageCrossover'())
 					(offspring '())
 					(currentOffspring '())
 					(currentOffspringError 0)
@@ -295,7 +297,7 @@
 					(newPopulationFitnesses '())
 				)
 				
-				; we only want to consider the first N fittest, so we cut down iteratively (drop worst ones)
+				; we loop 4 times and get the fittest parents in the population
 				(dotimes (j *fittestForReproductionAmount*) 
 					(setf (nth j fittestForReproduction) (nth j *population*)) 
 					(setf totalFitnessOfReproductionParents (+ totalFitnessOfReproductionParents (cdr (nth j fittestForReproduction))))
@@ -305,28 +307,35 @@
 				(dotimes (j *fittestForReproductionAmount*) 
 					(if (= j 0) ; calculate accumulative
 						(setf (nth 0 cumulative) (cdr (nth 0 fittestForReproduction))) ; the fittest one will always have the same fitness - cumulative pair
-						(setf (nth j cumulative) (+ (nth (- j 1) cumulative) (cdr (nth j fittestForReproduction)))) 
+						(setf (nth j cumulative) (+ (nth (- j 1) cumulative) (cdr (nth j fittestForReproduction)))) ; Get current fitness, add it with previous cumulative, set current cumulative
 					)
-					
 					(setf (nth j normalized) (/ (nth j cumulative) totalFitnessOfReproductionParents)) ; calculate normalized from the cumulative we just calculated
 				)
 				
-				;Find how many offspring needed, minus elite members
+				; Find how many offspring needed, minus elite members
 				(setf requiredOffspring (- *populationSize* *eliteMemSize*))
 				(setf offspring (make-list requiredOffspring))
 				
-			    ;Create the offspring, starting with Selection (Roulette Wheel), Crossover (Single Point) & Mutation
+			  ; Create offspring
+       	; Iterate 3 times
 				(dotimes (j requiredOffspring)
 
 					(setf randomNumberOne (get-random-range 0.0 1.0)) ; random number is used against the cumulative, 'roulette'
 					(setf randomNumberTwo (get-random-range 0.0 1.0)) 
 					
 					; get the first random parent from the roulette wheel
+          ; Iterates 4 times
+          ; first parent has 30% chance on roulette wheel
+          ; 0 - 0.3
+          ; random number = 0.2
+          ; if random < 0.3
 					(dotimes (k *fittestForReproductionAmount*)
 						(if (< randomNumberOne (nth k normalized))
 							(progn
+                ; car -> Chromosome
+                ; cdr -> Fitness
 								(setf parentOne (car (nth k fittestForReproduction))) 		
-								(return) ;breaks out of loop
+								(return) ; Break out of the loop
 							)
 						)
 					)
@@ -340,20 +349,17 @@
 							)
 						)
 					)
+
+					 (setf childAverageCrossover (GA-crossover parentOne parentTwo))
+          
+          ; now to add the two together and mutate to whole chromosome		
+          ; (append '(a b c) '(d e f) '() '(g)) =>  (A B C D E F G)
+          ;	Index		=  0  1  2  3  4
+          ;	ParentA = {5, 6, 7, 8, 9}
+          ;	ParentB = {11, 12, 13, 14, 15}
+          ;	Child[0] =	(ParentA[0] + ParentB[0]) / 2
+					(setf currentOffspring (GA-mutate childAverageCrossover))
 					
-					; the crossover method might require the weights to be split again so that parentsOne weightB is crossovered with parentsTwo weightB instead of just the whole chromosome all together
-					; same for weightA
-					; we supply the cut off point which is the length of the weightB chromosome of the Neural Network
-					(setf parentOneWeightPair (split-chromosome parentOne (* *inputWithDummyLength* *hlNeruons*)))
-					(setf parentTwoWeightPair (split-chromosome parentTwo (* *inputWithDummyLength* *hlNeruons*)))
-					
-					(setf weightBCrossover (crossover (car parentOneWeightPair) (car parentTwoWeightPair)))
-					(setf weightACrossover (crossover (cdr parentOneWeightPair) (cdr parentTwoWeightPair)))
-	
-					; now to add the two together and mutate to whole chromosome		
-					(setf currentOffspring (mutate (append weightBCrossover weightACrossover)))
-					
-					;(setf currentOffspring (genetic-algorithm parentOne parentTwo))
 					(NN-convert-chromosome-to-weights currentOffspring) ; convert the new offspring to neural network weights so that we can check its fitness 
 					
 					(print-new-line)
@@ -382,7 +388,7 @@
 	)
 )
 
-(defun split-chromosome (chromosome where)
+(defun GA-split-chromosome (chromosome where)
 	"Takes a whole chromosome and splits it into two defined by the where location"
 	(let*
 		(
@@ -398,56 +404,65 @@
 	)
 )
 
-(defun genetic-algorithm (chromosome1 chromosome2)
-    "After Selection is done perform Crossover & chance of Mutation"
-    (mutate (crossover chromosome1 chromosome2))
-)
-
-(defun mutate (chromToMutate)
-	"Mutate only in the odd time, this would happen when the chromosomes are starting 
-	to reach some level of local maxima. Mutation follows Value encoding suggestion were,
-	mutated values get a small number added/subtracted from it, as opposed to changing completely "
+(defun GA-mutate (chromToMutate)
+	"Mutate randomly by adding or subtracting a small value"
 	(setf mutateRandomNumber (random 101))
 	
 	(if (> *mutationChance* mutateRandomNumber) 
 		(progn
 			(print-new-line)
-			(princ " ********************** MUTATING **********************")
+			(princ "Mutating...")
 			(print-new-line)
-			(dotimes (i 120)
-				(if (oddp (random 2))
-				    (setf chromToMutate (doMutate 0 chromToMutate))
-					(setf chromToMutate (doMutate 1 chromToMutate))
+      ; Iterate based on how many weight we want to mutate per chromosome
+			(dotimes (i *amountOfWeightsMutatedPerChromosome*)
+				(if (oddp (random 2))	; Random [0,1]
+				    (setf chromToMutate (GA-doMutate 0 chromToMutate))	; If odd (Add)
+					(setf chromToMutate (GA-doMutate 1 chromToMutate))		; If even (Subtract)
 				)
 			)
-			chromToMutate ; need to finish here
+			chromToMutate
 		)
 		chromToMutate
 	)
 )
 
-(defun doMutate (x chromToMutate)
+(defun GA-doMutate (x chromToMutate)
     "If x = 0, then add to the random place in the chromosome else subtract"
     (let* (
 			(rand (random *chromosomeLength*))
-	      )
+	      	)
 		(if (= x 0)
-			(setf (nth rand chromToMutate) (+ (nth rand chromToMutate) *mutationRate*))
-			(setf (nth rand chromToMutate) (- (nth rand chromToMutate) *mutationRate*))
+			(setf (nth rand chromToMutate) (+ (nth rand chromToMutate) (get-random-range *mutationRateLow* *mutationRateHigh*)))
+			(setf (nth rand chromToMutate) (- (nth rand chromToMutate) (get-random-range *mutationRateLow* *mutationRateHigh*)))
 		)
 		chromToMutate
 	)
 )
 
-;Crossover taken from (C) Copyright 1995 by Steven L. Tanimoto.
-(defun crossover (individual1 individual2)
+
+;https://ai.stackexchange.com/questions/3428/mutation-and-crossover-in-a-genetic-algorithm-with-real-numbers
+;genome1 = { GeneA: 1, GeneB: 2.5, GeneC: 3.4 }
+;genome2 = { GeneA: 0.4, GeneB: 3.5, GeneC: 3.2 }
+;A few examples of crossover could be:
+;Taking the average: { GeneA: 0.7, GeneB: 3.0, GeneC: 3.3 }
+;Uniform (50% chance): { GeneA: 0.4, GeneB: 2.5, GeneC: 3.2 }
+(defun GA-crossover (parent1 parent2)
     "Returns a new path resulting from genetic crossover of individual1 and individual2."
-	
-    (let* (
-           (where (random (length individual1))) 
-		  )
-        (append (left-part individual1 where) (right-part individual2 where))
+
+  	(let*	(
+          	(childChromosome (make-list *chromosomeLength* :initial-element 1))
+        	)
+			(dotimes (i *chromosomeLength*)
+				(setf (nth i childChromosome) (/ (+ (nth i parent1) (nth i parent2) ) 2))
+      )
+      childChromosome
     )
+  
+    ;(let* (
+    ;      	(where (random (length parent1))) 	; Random number between 0-20
+		;  		)
+    ;	(append (left-part parent1 where) (right-part parent2 where))
+    ;)
 )
 
 (defun left-part (path k)
@@ -472,51 +487,53 @@
 	(let*
 		(	
 			(dataSetError 0)
-			(currentLine '())
+			(currLine '())
 		)
 		
 		; Calculate the fitness for these weights ( 1/total dataset error)
     ; Our population size [Skin-Not-Skin]: trainingData -> 245,057 (Full Dataset)
    	; Test dataset => 10% of overall -> 24,505
 		(dotimes (i (length *trainingData*))
-      ; currentLine -> ['(INPUTS) . DESIRED_OUTCOME]
-			(setf currentLine (nth i *trainingData*))
+      ; currLine -> ['(INPUTS) . DESIRED_OUTCOME]
+			(setf currLine (nth i *trainingData*))
 			(setf dataSetError 
 				(+ 
 					dataSetError 
-					(determine-fitness (take-line currentLine) (parse-desired-outputs currentLine))
+					(determine-fitness (take-line currLine) (parse-desired-outputs currLine))
 				)
 			)
 			
-			(if (zerop (mod i 700))
+      ; Print dataset error ever 7,000 inputs
+			(if (zerop (mod i *printErrorRate*))
 				(progn
 					(format t "~%At end of i # ~4d,  error: ~9,6F." i dataSetError)
 				)
 			)
 		)
 		
-		;Print the final results from this set of weights
-		(format t "~% End dataset error: ~9,6F" dataSetError)
-		(format t "~% End fitness: ~9,10F" (/ 1 dataSetError))
+		; Display final results from the current set of weights
+   	(princ "=================== Current Weight Results ===================")
+		(format t "~% Total Error [Current Weights]: ~9,6F" dataSetError)
+		(format t "~% Total Fitness: ~9,10F" (/ 1 dataSetError))
 		(if (= *totalCorrect* 0)
 			(progn
-				(format t "~% Accuracy of this chromosome  = ~9,10F" 0)
+				(format t "~% Chromosome Accuracy: ~9,10F" 0)
 			)
-			(format t "~% Accuracy of this chromosome  = ~9,10F" (* (/ *totalCorrect* (length *trainingData*)) 100))
+			(format t "~% Chromosome Accuracy: ~9,10F" (* (/ *totalCorrect* (length *trainingData*)) 100)) ; Print accuracy: 0%-100%
 		)
-		(setf *totalCorrect* 0) 
+		(setf *totalCorrect* 0) ; Reset total correct
 		
    ; Return current dataset error
 		dataSetError
 	)
 )
 
-(defun determine-fitness (inputs desiredOutputs)
+(defun determine-fitness (inputs desiredOutput)
     "Our main fitness function. This performs a feed-forward through the network, calculating the outputs, rounding 
 	the outputs (max to 1 and rest to 0), subtract desired from output to get errors, square + add errors to get total error
 	This is usually run through total dataset (batch calculation), Sum of total errors = Our Fitness value assigned"
     (let* (
-			 (xB (matrix-multiplication inputs *weightB*))
+			 (xB (NN-matrix-multiplication inputs *weightB*))
 			 (hA)
 			 (h (make-array (list 1 (nth 0 (array-dimensions *weightA*))) :initial-element 1))
 			 (output (make-array (list 1 *outputLength*) :initial-element 1))
@@ -531,7 +548,7 @@
 			  (setf (aref h 0 (+ i 1)) (sigmoid(aref xB 0 i)))
 		  )
 		  
-		  (setf hA (matrix-multiplication h *weightA*))
+		  (setf hA (NN-matrix-multiplication h *weightA*))
 		  (dotimes (i *outputLength*)
 			  (setf (aref output 0 i) (sigmoid(aref hA 0 i)))
 			   (setf (nth i otpt) (aref output 0 i)) ; round the values
@@ -547,13 +564,13 @@
 		  )
 		  
 		; checks if the actual is the same as desired
-		(if (equalp output desiredOutputs)
+		(if (equalp output desiredOutput)
 			(setf *totalCorrect* (+ *totalCorrect* 1))
 		)
 		  
 		  ;Get errors from each desiredOutput and output
 		  (dotimes (i *outputLength*)
-		      (setf (aref errors 0 i) (- (aref desiredOutputs 0 i) (aref output 0 i)))
+		      (setf (aref errors 0 i) (- (aref desiredOutput 0 i) (aref output 0 i)))
 			  (setf totalError (+ (square (aref errors 0 i)) totalError))
 		  )
 
@@ -561,36 +578,19 @@
 	  )
 )
 
-(defun update-weights (inputToHiddenNewWeights hiddenToOutputNewWeights)
-    "Function used with back propagation to update the weight values after the update matrix is determined"
-	(dotimes (i *inputWithDummyLength*)
-		(dotimes (j *hlNeruons*)
-			
-			(setf (aref *weightB* i j) (aref inputToHiddenNewWeights i j))
-		)
-	)
-	
-	(dotimes (i *hlNeruonsWithDummyLength*)
-		(dotimes (j *outputLength*)
-			
-			(setf (aref *weightA* i j) (aref hiddenToOutputNewWeights i j))
-		)
-	)
-)
-
 (defun get-weights-from-chromosome (chromosome)
-	"A chromosome is transferred back to the two weight sets that it contains, a dotted pair of the parsed out result is returned"
+	"Chromosome transformed back into two sets of weights"
     (let* 
 		(
-			(inputToHiddenWeights (make-array (list *inputWithDummyLength* *hlNeruons*) :initial-element 1))
-			(hiddenToOutputsWeights (make-array (list *hlNeruonsWithDummyLength* *outputLength*) :initial-element 1))
+			(weightsB (make-array (list *inputWithDummyLength* *hlNeruons*) :initial-element 1))
+			(weightsA (make-array (list *hlNeruonsWithDummyLength* *outputLength*) :initial-element 1))
 			(weightPair '())
 			(currentNode 0)
 		)
 
 		(dotimes (i *inputWithDummyLength*)
 			(dotimes (j *hlNeruons*)
-				(setf (aref inputToHiddenWeights i j) (nth currentNode chromosome))
+				(setf (aref weightsB i j) (nth currentNode chromosome))
 				(setf currentNode (+ currentNode 1))
 			)
 		)
@@ -598,12 +598,12 @@
 		; currentNode will know from where to pick off  for the hiddentoOutput NN
 		(dotimes (i *hlNeruonsWithDummyLength*)
 			(dotimes (j *outputLength*)
-				(setf (aref hiddenToOutputsWeights i j) (nth currentNode chromosome))
+				(setf (aref weightsA i j) (nth currentNode chromosome))
 				(setf currentNode (+ currentNode 1))
 			)
 		)
 		
-		(setf weightPair (cons inputToHiddenWeights hiddenToOutputsWeights))
+		(setf weightPair (cons weightsB weightsA))
 		
 		weightPair
 	)
@@ -626,8 +626,6 @@
 ;69	80	118	1
 ;70	81	119	1
 ;1 74 84 123
-;1000000000	0.0000	0.1250	0.3750	0.9375	0.7500	0.0625	0.0000	0.0000	0.0000	0.4667	1.0000	0.3750	0.3750	0.6250	0.0000	0.0000	0.0000	0.5000	1.0000	0.1250	0.0000	0.6875	0.1250	0.0000	0.0000	0.3125	1.0000	0.1875	0.0000	0.3125	0.4375	0.0000	0.0000	0.4667	0.8125	0.1875	0.0000	0.5000	0.5000	0.0000	0.0000	0.2500	0.7500	0.0000	0.0625	0.8125	0.3125	0.0000	0.0000	0.0000	0.8750	0.5625	0.9375	0.5625	0.0000	0.0000	0.0000	0.0000	0.3750	0.8750	0.4375	0.0625	0.0000	0.0000
-;1000000000	0.0000	0.0000	0.6250	1.0000	0.3750	0.0000	0.0000	0.0000	0.0000	0.4667	1.0000	0.5000	1.0000	0.3125	0.0000	0.0000	0.0000	0.6875	1.0000	0.0000	0.3750	0.8750	0.1875	0.0000	0.0000	0.7500	0.7500	0.0000	0.0000	0.6875	0.6875	0.0000	0.0000	0.8000	0.7500	0.0000	0.0000	0.5000	0.8571	0.0000	0.0000	0.4375	0.9375	0.0625	0.0000	0.8125	0.6875	0.0000	0.0000	0.0000	1.0000	0.5000	0.6250	0.9375	0.1875	0.0000	0.0000	0.0000	0.6250	1.0000	0.9375	0.1875	0.0000	0.0000
 
 (defun NN-read-file (path)
     "Read outputs and inputs and store them in a list of lists called *trainingData*
@@ -661,27 +659,10 @@
 	)
 )
 
-; Code found in https://rosettacode.org/wiki/Matrix_transposition#Common_Lisp
-(defun rotate (A)
-  "Transpose a mxn matrix A to a nxm matrix B=A'"
-  (let* ((m (array-dimension A 0))
-         (n (array-dimension A 1))
-         (B (make-array `(,n ,m) :initial-element 0)))
-    (loop for i from 0 below m do
-          (loop for j from 0 below n do
-                (setf (aref B j i)
-                      (aref A i j))))
-    B)
-)
 
 (defun sigmoid (x)
     "Sigmoid Function ( 1/1+e^-x )"
     (/ 1 (+ 1 (exp (- x))))
-)
-
-(defun hyperbolic-sine (x)
-    "Hyperbolic sine (e^x-e^-x)/2"
-    (/ (- (exp x) (exp (- x))) 2)
 )
 
 (defun square (x)
@@ -694,12 +675,12 @@
     (reduce #'max list)
 )
 
-; Code from class
-(defun matrix-multiplication (a b)
+; Code written by Shane Dowdall in lecture
+(defun NN-matrix-multiplication (a b)
     "Multiply two matrices"
     (let* 
 		(
-	        (m (nth 0 (array-dimensions a)))
+	    (m (nth 0 (array-dimensions a)))
 			(s (nth 1 (array-dimensions a)))
 			(n (nth 1 (array-dimensions b)))
 			(result (make-array (list m n) :initial-element 1))
@@ -718,8 +699,7 @@
 
 
 (defun take-line (line)
-    "Take a line from the data list (e.g. (nth 0 *trainingData*))
-	and convert it to matrix 1*65 (used as input & added dummy value 1 to start)"
+    "Take a line from the data list and convert to matrix 1*4"
     (let* (
 	          (result (make-array (list 1 *inputWithDummyLength*) :initial-element 1))
 	      )
@@ -733,8 +713,7 @@
 
 
 (defun parse-desired-outputs (line)
-    "Take a line of output and inputs. Take the first 10 characters (outputs)
-	parse them as an integer and add them to 1*10 matrix"
+    "Take a line of output and inputs and parse it"
     (let* (
 	          (result (make-array (list 1 *outputLength*) :initial-element 1))
 			  (outputStr (nth 0 line))
@@ -771,14 +750,20 @@
 ;https://archive.ics.uci.edu/ml/machine-learning-databases/00229/Skin_NonSkin.txt
 ;(load [filepath])
 
-;Set the training file
-;(set-training-data-file-path [path//trainingAll.txt])
-
-;Set the test file
-;(set-test-data-file-path [path//testAll.txt])
-
 ;//Start the training passing number of generations (e.g. 100)
 ;(NN-start-training [numberOfGenerations])
 
 ;//Test the Neural Network
-;(test-set)
+;(NN-get-fitness-test-set)
+
+; Extra test commands
+; 1: (load "C:\\path\\to\\cl")
+; 2: (set-training-data-file-path "C:\\path\\to\\training_data")
+; 3: (set-test-data-file-path "C:\\path\\to\\test_data")
+; 4i: (NN-read-training-file)
+; 5i: (print *trainingData*)
+; 4ii: (NN-read-test-file)
+; 5ii: (print *testData*)
+
+
+
