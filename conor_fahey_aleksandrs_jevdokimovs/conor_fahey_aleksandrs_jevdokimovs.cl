@@ -470,7 +470,8 @@
 				(+ 
 					dataSetError 
 					(print "-------->>> INSIDE TRAIN")
-					(determine-fitness (take-line currLine) (parse-desired-outputs currLine))
+					(print currLine)
+					(determine-fitness (take-line (car currLine)) (parse-desired-outputs (cdr currLine)))
 				)
 			)
 			; Print dataset error every 7,000 inputs
@@ -670,8 +671,16 @@
 			
 			(format t "-------->>> line: ~S" line)
 			(format t "-------->>> line Length: ~D" (length line))
+          
 			(dotimes (i (- (length line) 1))
-				(setf (aref result 0 (+ i 1)) ( nth (+ i 1) line ))
+        (print-Nl)
+        (format t "~%Index: [~D]~%" i)
+        (print line)
+        (print-Nl)
+        ;
+        ;	HEY! There is a bug here. On index 3, trying to access outside of 
+        ;
+				(setf (aref result 0 (+ i 1)) (nth i line))
 			)
 		result
 	)
